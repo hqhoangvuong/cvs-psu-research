@@ -123,7 +123,7 @@ All other command codes in the CSV2000BP table (for example `CLEAR_FAULTS` 0x03;
 
 ## 6. Output current, power and voltage
 
-No PMBus register for output current, power or voltage has been identified. At no load, `0x6F` reads 0 and `0x6E`/`0xE1` track input power. A load test is needed to confirm which vendor code carries output current or power. Output voltage was measured only with a multimeter (12.32 to 12.33 V). **?**
+No PMBus register for output current, power or voltage has been identified. At no load, `0x6F` reads 0 and `0x6E`/`0xE1` track input power. A load test is needed to confirm which vendor code carries output current or power. Output voltage was measured only with a multimeter (12.32 to 12.33 V). To log them anyway, `firmware/csv750_monitor/` reads VOUT, IOUT and POUT from an external INA260 or INA226 in series with the output. **?**
 
 ## 7. Open items
 
