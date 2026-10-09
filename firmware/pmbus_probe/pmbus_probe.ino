@@ -12,6 +12,8 @@
 // This sketch only reads. It never writes OPERATION, CLEAR_FAULTS or any setting.
 // Open the serial monitor at 115200 baud. Send any character to run the probe again.
 // Paste the whole output back; it is formatted to be turned into the PMBus document.
+// A "variants" block tests read length (1-4 bytes) and repeated-start vs STOP framing per command.
+// Record the PSU state (main output on/off, load) with each capture.
 
 #include <Wire.h>
 
@@ -114,6 +116,46 @@ void printBlock(const char *name, uint8_t cmd) {
   Serial.println();
 }
 
+// Raw read for framing experiments: command write, then either repeated start (stop=false) or
+// STOP before the read (stop=true), then n bytes. Returns bytes received or -1 on write error.
+int readRaw(uint8_t cmd, uint8_t n, bool stop, uint8_t *buf) {
+  Wire.beginTransmission(psu);
+  Wire.write(cmd);
+  uint8_t err = Wire.endTransmission(stop);
+  if (err) { gap(); return -1; }
+  uint8_t got = Wire.requestFrom(psu, n);
+  for (uint8_t i = 0; i < got; i++) buf[i] = Wire.read();
+  gap();
+  return got;
+}
+
+void printRaw(uint8_t cmd, const char *name, uint8_t n, bool stop) {
+  uint8_t b[8] = {0};
+  int got = readRaw(cmd, n, stop, b);
+  Serial.printf("variant,0x%02X,%s,%s,n=%u,", cmd, name, stop ? "stop" : "rstart", n);
+  if (got < 0) { Serial.println(F("write_err")); return; }
+  Serial.printf("got=%d,hex=", got);
+  for (int i = 0; i < got; i++) Serial.printf("%02X", b[i]);
+  Serial.println();
+}
+
+// Framing/length experiments on the commands that read back with a 0xFF high byte, plus READ_VIN
+// (known good) as a control. Compare: does the 1-byte read give the same low byte, does a 3rd/4th
+// byte show PEC or data, does STOP-before-read change the high byte, are repeats stable.
+void variants() {
+  Serial.println(F("# variants: variant,cmd,name,framing,n,got,hex"));
+  const struct { uint8_t cmd; const char *name; } cmds[] = {
+    {0x88, "READ_VIN"}, {0x89, "READ_IIN"}, {0x8B, "READ_VOUT"}, {0x8C, "READ_IOUT"},
+    {0x8F, "READ_TEMPERATURE_3"}, {0x96, "READ_POUT"}, {0x97, "READ_PIN"},
+    {0xA6, "MFR_IOUT_MAX"}, {0xC0, "MFR_MAX_TEMP_1"}, {0x79, "STATUS_WORD"}, {0x78, "STATUS_BYTE"},
+  };
+  for (const auto &c : cmds) {
+    for (uint8_t n = 1; n <= 4; n++) printRaw(c.cmd, c.name, n, false);  // repeated start
+    for (uint8_t n = 2; n <= 3; n++) printRaw(c.cmd, c.name, n, true);   // STOP before read
+    for (uint8_t i = 0; i < 3; i++) printRaw(c.cmd, c.name, 2, false);   // stability
+  }
+}
+
 void probe() {
   scanBus();
 
@@ -181,17 +223,14 @@ void probe() {
   printWord("MFR_MAX_TEMP_2", 0xC1);
   printWord("MFR_MAX_TEMP_3", 0xC2);
 
+  variants();
+
   // QUERY every command code. info bit7 = supported, bit6 = write, bit5 = read,
   // bits4:2 = data format code (see PMBus Part II, QUERY). Raw byte is printed; decode offline.
   Serial.println(F("# QUERY sweep: query,cmd,info"));
   int first = query(0x00);
   if (first < 0) {
-    Serial.println(F("# QUERY not supported or failed; falling back to NACK/ACK map via reads"));
-    for (int c = 0; c < 256; c++) {
-      uint8_t b[2];
-      int r = readBytes((uint8_t)c, b, 1);
-      if (r >= 0) Serial.printf("readable,0x%02X\n", c);
-    }
+    Serial.println(F("# QUERY not supported or failed (this PSU ACKs every command code, so no ACK map)"));
   } else {
     for (int c = 0; c < 256; c++) {
       int info = query((uint8_t)c);
