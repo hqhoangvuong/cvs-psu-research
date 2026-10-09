@@ -116,26 +116,68 @@ void printBlock(const char *name, uint8_t cmd) {
   Serial.println();
 }
 
+uint8_t crc8(const uint8_t *d, uint8_t n) {  // SMBus PEC: poly 0x07, init 0
+  uint8_t c = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    c ^= d[i];
+    for (uint8_t k = 0; k < 8; k++) c = (c & 0x80) ? (uint8_t)((c << 1) ^ 0x07) : (uint8_t)(c << 1);
+  }
+  return c;
+}
+
+// Release a slave that holds SDA low: clock SCL up to 9 times, then send a STOP, then restart Wire.
+void recoverBus() {
+  pinMode(PIN_SDA, INPUT_PULLUP);
+  pinMode(PIN_SCL, OUTPUT_OPEN_DRAIN);
+  for (int i = 0; i < 9 && digitalRead(PIN_SDA) == LOW; i++) {
+    digitalWrite(PIN_SCL, LOW);  delayMicroseconds(10);
+    digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+  }
+  pinMode(PIN_SDA, OUTPUT_OPEN_DRAIN);
+  digitalWrite(PIN_SDA, LOW);  delayMicroseconds(10);
+  digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+  digitalWrite(PIN_SDA, HIGH); delayMicroseconds(10);
+  Wire.begin(PIN_SDA, PIN_SCL);
+  Wire.setClock(BUS_HZ);
+  Wire.setClockStretchLimit(STRETCH_LIMIT_US);
+}
+
 // Raw read for framing experiments: command write, then either repeated start (stop=false) or
-// STOP before the read (stop=true), then n bytes. Returns bytes received or -1 on write error.
+// STOP before the read (stop=true), then n bytes. Returns bytes received, or -(endTransmission
+// error) on a write error (1 too long, 2 NACK on address, 3 NACK on data, 4 other, 5 timeout).
 int readRaw(uint8_t cmd, uint8_t n, bool stop, uint8_t *buf) {
   Wire.beginTransmission(psu);
   Wire.write(cmd);
   uint8_t err = Wire.endTransmission(stop);
-  if (err) { gap(); return -1; }
+  if (err) { gap(); return -(int)err; }
   uint8_t got = Wire.requestFrom(psu, n);
   for (uint8_t i = 0; i < got; i++) buf[i] = Wire.read();
   gap();
   return got;
 }
 
+// On a write error, report line levels, wait, try a bus recovery, and retry up to 3 times.
 void printRaw(uint8_t cmd, const char *name, uint8_t n, bool stop) {
   uint8_t b[8] = {0};
   int got = readRaw(cmd, n, stop, b);
-  Serial.printf("variant,0x%02X,%s,%s,n=%u,", cmd, name, stop ? "stop" : "rstart", n);
-  if (got < 0) { Serial.println(F("write_err")); return; }
+  int retries = 0;
+  while (got < 0 && retries < 3) {
+    Serial.printf("fault,0x%02X,err=%d,sda=%d,scl=%d,retry=%d\n", cmd, -got,
+                  digitalRead(PIN_SDA), digitalRead(PIN_SCL), retries);
+    delay(200);
+    recoverBus();
+    got = readRaw(cmd, n, stop, b);
+    retries++;
+  }
+  Serial.printf("variant,0x%02X,%s,%s,n=%u,retries=%d,", cmd, name, stop ? "stop" : "rstart", n, retries);
+  if (got < 0) { Serial.printf("write_err=%d\n", -got); return; }
   Serial.printf("got=%d,hex=", got);
   for (int i = 0; i < got; i++) Serial.printf("%02X", b[i]);
+  if (got >= 2) {  // does the last byte equal the SMBus PEC of the whole transaction?
+    uint8_t m[10] = {(uint8_t)(psu << 1), cmd, (uint8_t)((psu << 1) | 1)};
+    for (int i = 0; i < got - 1; i++) m[3 + i] = b[i];
+    Serial.printf(",pec_last=%s", crc8(m, 3 + got - 1) == b[got - 1] ? "ok" : "no");
+  }
   Serial.println();
 }
 

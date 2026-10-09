@@ -23,3 +23,10 @@ Hypotheses, in order of how cheaply they can be tested:
 
 ## Next capture requested
 Same probe with: (a) main output on, no load; (b) known load; for each, note the state. Plus the hypothesis 1 and 2 variants above (to be added to the probe).
+
+## Run 2 (variants block) findings
+- **PEC is always appended.** READ_VIN with n=3 and n=4 returns `8C F3 35 FF`: the third byte is the SMBus PEC (CRC-8, poly 0x07, over D0 88 D1 8C F3 = 0x35; verified offline, and the n=3 repeated-start read `8D F3 20` also matches 0x20). The fourth byte is the floating bus (0xFF). So the 750BP supports PEC on reads, and any read longer than the data returns PEC next. This fits CAPABILITY bit7. It does not explain the 0xFF high bytes.
+- READ_VIN is stable (0xF38C/0xF38D, 227 V). Stop-before-read gives the same data, so STOP versus repeated start is not the issue for the commands that work.
+- **The PSU stops responding mid-run.** From the 8th variant read (second repeat of READ_VIN, n=2) every endTransmission fails, for every command, to the end of the run. This is not one command misbehaving: the slave stopped ACKing its address (or SDA/SCL is stuck). The probe did not print the error code, so NACK versus bus-stuck/timeout is unknown. The earlier ~40 transactions worked. The variants for IIN, IOUT, etc. never ran, so hypotheses 1 and 2 are still untested.
+- READ_TEMPERATURE_1 moved 22 to 25 degC, fan 6352 to 5984 rpm, PIN 2 to 4 W (0xCA00): live values, and the 0xFF-high-byte words are unchanged between runs (deterministic).
+- Probe updated: prints the endTransmission error code, SDA/SCL levels at a fault, waits 200 ms, clocks out the bus (9 SCL pulses + STOP), retries up to 3 times, and checks `pec_last` on each variant read.
