@@ -1,0 +1,53 @@
+code,name,default,access,data_bytes,format,description,page
+0x00,PAGE,0x00,R,1,Hex,Only read supported,34
+0x01,OPERATION,0x80,R/W,1,Bitmapped,"b7:6 = 10 PSU ON, 01 immediate OFF (no sequencing); b5:0 reserved; margining not supported",34
+0x02,ON_OFF_CONFIG,0x1C,R,1,Bitmapped,"b4 enable CONTROL pin + serial; b3 serial ON/OFF via OPERATION (needs CONTROL pin asserted); b2 respond to CONTROL pin; b1 CONTROL polarity (0 = active low); b0 CONTROL action (0 = programmed delay, 1 = immediate)",34
+0x03,CLEAR_FAULTS,,S (send byte),0,,No data byte,34
+0x05,PAGE_PLUS_WRITE,0x00,BW,varies,,,34
+0x06,PAGE_PLUS_READ,0x00,BR/BW,varies,,,34
+0x19,CAPABILITY,0x90,R,1,Bitmapped,"b7 PEC (1 = supported); b6 max bus speed (0 = 100 kHz, 1 = 400 kHz); b5 SMBALERT pin (1 = supported); b4:0 reserved",35
+0x1A,QUERY,,BR/BW,,N/A,Ask whether a command is supported,35
+0x1B,SMBALERT_MASK,,BR/BW,,N/A,"Used with STATUS_INPUT, STATUS_TEMPERATURE, STATUS_IOUT",35
+0x20,VOUT_MODE,0x17,R,1,Bitmapped,Mode and parameters of output-voltage data formats,35
+0x30,COEFFICIENTS,,BW/BR,5,Hex,"byte5 R, byte4:3 b (low,high), byte2:1 m (low,high); defaults R=0 b=0 m=1",35
+0x3A,FAN_CONFIG_1_2,0x90,R,1,Bitmapped,"b7 fan1 installed; b6 0=RPM cmd 1=duty; b5:4 pulses/rev (00=1,01=2,10=3,11=4); b3:0 reserved",35
+0x3B,FAN_COMMAND_1,,R/W,2,Linear,"Duty-cycle control 0-100%; device may override for temperature",35
+0x4A,IOUT_OC_WARN_LIMIT,,R/W,2,Linear,Output over-current warning threshold in A,35
+0x51,OT_WARN_LIMIT (Hot Spot),,R,2,Hex,Secondary ambient temperature warning threshold in degC; operating limit,35
+0x78,STATUS_BYTE,,R,1,,Summary of critical faults,36
+0x79,STATUS_WORD,,R,2,Bitmapped,Summary of unit fault and warning status,36
+0x7A,STATUS_VOUT,,R,1,Bitmapped,"b7 VOUT OV fault, b4 VOUT UV fault (only these listed)",36
+0x7B,STATUS_IOUT,,R,1,Bitmapped,"b7 IOUT OC fault, b5 IOUT OC warning, b3 current share fault, b1 POUT_OP fault, b0 POUT_OP warning",37
+0x7C,STATUS_INPUT,,R,1,Bitmapped,"b5 VIN UV warning, b4 VIN UV fault, b3 unit off for low input voltage, b1 IIN OC warning, b0 labelled POUT_OP_WARNING (likely a typo in the note)",37
+0x7D,STATUS_TEMPERATURE,,R,1,Bitmapped,b7 OT fault; b6 OT warning,37
+0x7E,STATUS_CML,,R,1,Bitmapped,b7 invalid/unsupported command; b6 invalid data; b5 PEC failed; b1 other communication fault,37
+0x80,STATUS_MFR_SPECIFIC,,R,1,Bitmapped,"b7 current share warning; b6 12Vaux UV or OC fault; b5 12V OC fault; b4 12Vaux OV fault; b3 12V UV fault; b2 12V OV fault; b1 thermal fault; b0 fan fault",37
+0x81,STATUS_FANS_1_2,,R,1,Bitmapped,b7 fan1 fault; b5 fan1 warning,37
+0x86,READ_EIN,,BR,6,,Accumulated input energy,37
+0x87,READ_EOUT,,BR,6,,Accumulated output energy,37
+0x88,READ_VIN,,R,2,Linear,Input voltage (V ac),37
+0x89,READ_IIN,,R,2,Linear,Input current (A),37
+0x8B,READ_VOUT,,R,2,Linear,Measured output voltage (V),38
+0x8C,READ_IOUT,,R,2,Linear,Output current (A),38
+0x8D,READ_TEMPERATURE_1 (Ambient),,R,2,Linear,degC,38
+0x8E,READ_TEMPERATURE_2 (Hot Spot),,R,2,Linear,degC,38
+0x8F,READ_TEMPERATURE_3,,R,2,Linear,,38
+0x90,READ_FAN_SPEED_1,,R,2,Linear,Fan 1 speed,38
+0x96,READ_POUT,,R,2,Linear,Output power (W),38
+0x97,READ_PIN,,R,2,Linear,Input power (W),38
+0x98,PMBUS_REVISION,,R,1,Bitmapped,PMBus revision,38
+0x99,MFR_ID,,BR ASCII,4,,Manufacturer abbreviation,38
+0x9A,MFR_MODEL,,BR ASCII,15,,Model number,38
+0x9B,MFR_REVISION,,BR ASCII,2,,Revision,38
+0x9C,MFR_LOCATION,,BR ASCII,16,,Manufacturing facility,38
+0x9D,MFR_DATE,,BR,6,,Manufacture date YYYYMMDD,38
+0x9E,MFR_SERIAL,,BR,13,,Serial number ASCII,38
+0x9F,APP_PROFILE_SUPPORT,,BR,,,,38
+0xA6,MFR_IOUT_MAX,,R,2,Linear,Maximum output current,38
+0xA7,MFR_POUT_MAX,,R,2,Linear,Maximum output power,38
+0xC0,MFR_MAX_TEMP_1 (Ambient),,R,2,Linear,Maximum ambient temperature,38
+0xC1,MFR_MAX_TEMP_2 (Hot Spot),,R,2,Linear,Maximum hot spot temperature,38
+0xC2,MFR_MAX_TEMP_3,,R,2,Linear,,38
+0xE1,READ_PIN_AVG,,R,2,,,38
+0xFB,PRIMARY_FW_REVISION,,R,1,,,38
+0xFC,SECONDARY_FW_VERSION,,R,1,,,38
