@@ -32,3 +32,5 @@ code,name,measured_raw,decoded,trust,notes
 0xFC,SECONDARY_FW_VERSION,0x30,ASCII '0'?,unverified,
 0x1A,QUERY,failed,,measured,QUERY(0) failed. Command is unsupported or the process-call framing is wrong
 all,ACK map,all 256 codes ACK,,measured,PSU ACKs every command byte so the fallback map says nothing about support
+0x89 0x8B 0x8C 0x8F 0x96 0xA6 0xC0-0xC2 0x78 0x79,run3 single-byte replies,"1 data byte then 0xFF, no PEC",decoded values in earlier rows are artefacts,measured,Main output off. Retest with PSON asserted
+0x88 0x97,run3 PEC,"data + CRC-8 PEC (VIN 84F39D, PIN 00C25D)",PEC verified,confirmed,Commands that answer properly append PEC
