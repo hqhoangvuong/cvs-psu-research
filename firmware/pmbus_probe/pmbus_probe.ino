@@ -203,7 +203,12 @@ void variants() {
 // byte then 0xFF. Read 8 bytes per code (repeated start) and report the shortest prefix k (2..7)
 // whose last byte equals the PEC of addr+cmd+addr|1+preceding bytes. ~1/256 false matches per k, so
 // a hit is strong evidence, a miss is "no valid PEC" (unsupported, or no PEC on that command).
+uint8_t hitCmd[96];
+uint8_t hitK[96];
+uint8_t nHits = 0;
+
 void pecSweep() {
+  nHits = 0;
   Serial.println(F("# pecsweep: pecsweep,cmd,k(data bytes+PEC),hex8   (only codes with a valid PEC)"));
   int hits = 0;
   for (int c = 0; c < 256; c++) {
@@ -218,11 +223,35 @@ void pecSweep() {
         for (int i = 0; i < 8; i++) Serial.printf("%02X", b[i]);
         Serial.println();
         hits++;
+        if (nHits < sizeof(hitCmd)) { hitCmd[nHits] = c; hitK[nHits] = k; nHits++; }
         break;
       }
     }
   }
   Serial.printf("# pecsweep done, %d codes with valid PEC\n", hits);
+}
+
+// Send 'w' on the serial monitor to poll every code that answered with a valid PEC, one CSV row per
+// cycle (cmd:data bytes, PEC dropped), until any key is sent. Change the load or the input while it
+// runs and see which fields move. Fields that never change are static config.
+void watch() {
+  if (!psu || !nHits) { Serial.println(F("# watch: run the probe first")); return; }
+  Serial.print(F("# watch header: ms"));
+  for (uint8_t i = 0; i < nHits; i++) Serial.printf(",%02X", hitCmd[i]);
+  Serial.println();
+  while (!Serial.available()) {
+    Serial.printf("watch,%lu", (unsigned long)millis());
+    for (uint8_t i = 0; i < nHits; i++) {
+      uint8_t b[8] = {0};
+      int got = readRaw(hitCmd[i], hitK[i], false, b);
+      Serial.print(',');
+      if (got < 0) { Serial.print(F("ERR")); continue; }
+      for (uint8_t j = 0; j + 1 < hitK[i]; j++) Serial.printf("%02X", b[j]);
+    }
+    Serial.println();
+  }
+  while (Serial.available()) Serial.read();
+  Serial.println(F("# watch stopped"));
 }
 
 void probe() {
@@ -322,7 +351,8 @@ void setup() {
 
 void loop() {
   if (Serial.available()) {
+    int ch = Serial.read();
     while (Serial.available()) Serial.read();
-    probe();
+    if (ch == 'w' || ch == 'W') watch(); else probe();
   }
 }

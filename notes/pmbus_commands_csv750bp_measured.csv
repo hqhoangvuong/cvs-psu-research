@@ -34,3 +34,13 @@ code,name,measured_raw,decoded,trust,notes
 all,ACK map,all 256 codes ACK,,measured,PSU ACKs every command byte so the fallback map says nothing about support
 0x89 0x8B 0x8C 0x8F 0x96 0xA6 0xC0-0xC2 0x78 0x79,run3 single-byte replies,"1 data byte then 0xFF, no PEC",decoded values in earlier rows are artefacts,measured,Main output off. Retest with PSON asserted
 0x88 0x97,run3 PEC,"data + CRC-8 PEC (VIN 84F39D, PIN 00C25D)",PEC verified,confirmed,Commands that answer properly append PEC
+# --- run 4: main output ON (12.32 V on multimeter, two solid green LEDs, no load); PEC sweep ---
+0x01 0x02 0x20 0x7A-0x7E 0x80 0x81 0xFB 0xFC,PEC-valid single byte,OPERATION 00; ON_OFF_CONFIG 15; VOUT_MODE 1B; STATUS_VOUT/IOUT/INPUT/TEMP 00 00 00 00; STATUS_CML 82; MFR_SPECIFIC 00; FANS 00; FW 35/30,real values,confirmed,Valid PEC on the reply
+0x88 0x8D 0x8E 0x90 0x97 0xA7,PEC-valid word,VIN 227 V; TEMP1 27 degC; TEMP2 30 degC; FAN 5984 rpm; PIN 5 W; POUT_MAX 750 W,LINEAR11,confirmed,
+0x99,PEC-valid block,MFR_ID len 4 EMER,,confirmed,Other MFR_* blocks are longer than the sweep window
+0x30,PEC-valid block,len 5: 01 00 00 00 00,COEFFICIENTS-like (m=1 b=0 R=0?),unverified,Not decoded; no READ_* uses DIRECT as far as seen
+0x3A 0x3B,PEC-valid,0x3A=D0 (byte); 0x3B=0BE8 word (LINEAR11 2000?),vendor/fan config,unverified,
+0x6C 0x6E 0x6F,PEC-valid words,6C=CA80 (=READ_PIN 5 W); 6E=0005; 6F=0000,unknown,unverified,6C mirrors READ_PIN
+0x70 0x71 0x72,PEC-valid blocks len 4,70=60 01 FF 02; 71=00 00 12 00; 72=FB D2 9E 9A,unknown,unverified,
+0x83 0x84 0xA8 0xB0 0xB9-0xBE 0xD9 0xDA 0xDE 0xDF 0xE1 0xE3 0xFA 0xFD 0xFE,PEC-valid vendor,see raw sweep in probe_run1_analysis.md,unknown,unverified,A8 and B0 read 0x02EE (750)
+0x19 0x98 0x78 0x79 0x89 0x8B 0x8C 0x8F 0x96 0xA6 0xC0-0xC2,NOT supported,single stale byte or 0xFF,CAPABILITY/PMBUS_REVISION/STATUS_BYTE/STATUS_WORD/READ_IIN/VOUT/IOUT/TEMP3/POUT/MFR_IOUT_MAX/MFR_MAX_TEMP_*,confirmed,No valid PEC with main output on at 12.32 V; earlier 0x5F/0xFC for PMBUS_REVISION/CAPABILITY were stale bytes
