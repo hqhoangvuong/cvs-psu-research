@@ -1,0 +1,34 @@
+code,name,measured_raw,decoded,trust,notes
+0x99,MFR_ID,454D4552,"EMER",good,Block read len 4 (Emerson, Artesyn's former owner)
+0x9A,MFR_MODEL,3030594C3535372020202020,"00YL557",good,Block len 12 space padded; internal part number not "CSV750BP"
+0x9B,MFR_REVISION,3030594C3535362020202020,"00YL556",good,Block len 12 (2000BP note says 2 bytes)
+0x9C,MFR_LOCATION,204B31313831," K1181",good,Block len 6
+0x9D,MFR_DATE,FF x30,unprogrammed,suspect,len byte 30 but all 0xFF
+0x9E,MFR_SERIAL,36374D325039,"67M2P9",good,Block len 6
+0x98,PMBUS_REVISION,0x5F,invalid as PMBus rev,suspect,Not a valid Part I/II nibble pair
+0x19,CAPABILITY,0xFC,reserved bits set,suspect,2000BP default 0x90
+0x20,VOUT_MODE,0x1B,linear exp -5 (1/32 V),unverified,2000BP default 0x17 (exp -9)
+0x02,ON_OFF_CONFIG,0x15,"pu=1 cmd=0 cp=1 pol=0(active low) action=1(immediate)",plausible,cmd=0 => OPERATION ignored; CONTROL pin only. 2000BP default 0x1C
+0x01,OPERATION,0x00,off/immediate-off,plausible,Consistent with main output off
+0x88,READ_VIN,0xF38D,"LINEAR11 exp -2 mant 909 = 227.25 V",confirmed,Matches mains
+0x97,READ_PIN,0xC200,"LINEAR11 exp -8 mant 512 = 2.0 W",plausible,Standby-level power with main off
+0x8D,READ_TEMPERATURE_1,0x0016,22 degC LINEAR11,plausible,
+0x8E,READ_TEMPERATURE_2,0x001E,30 degC LINEAR11,plausible,
+0x90,READ_FAN_SPEED_1,0x1B1A,"LINEAR11 exp 3 mant 794 = 6352 rpm",plausible,
+0xA7,MFR_POUT_MAX,0x02EE,750 W LINEAR11 exp 0,confirmed,Matches 750 W rating
+0x89,READ_IIN,0xFF1D,high byte 0xFF,suspect,Same value as earlier session: deterministic
+0x8C,READ_IOUT,0xFF5C,high byte 0xFF,suspect,Same as earlier session
+0x96,READ_POUT,0xFF89,high byte 0xFF,suspect,Same as earlier session
+0x8B,READ_VOUT,0xFF37,high byte 0xFF,suspect,
+0x8F,READ_TEMPERATURE_3,0xFF63,high byte 0xFF,suspect,
+0xA6,MFR_IOUT_MAX,0xFF70,high byte 0xFF,suspect,Expected about 61 A; static value so not noise
+0xC0,MFR_MAX_TEMP_1,0xFFFB,high byte 0xFF,suspect,
+0xC1,MFR_MAX_TEMP_2,0xFFEE,high byte 0xFF,suspect,
+0xC2,MFR_MAX_TEMP_3,0xFFD1,high byte 0xFF,suspect,
+0x79,STATUS_WORD,0xFF09,high byte 0xFF,suspect,Low byte 0x09 disagrees with STATUS_BYTE 0x1C
+0x78,STATUS_BYTE,0x1C,,suspect,Disagrees with STATUS_WORD low byte; no OFF bit (0x40) despite output apparently off
+0x7A-0x81,STATUS_VOUT..STATUS_FANS_1_2,0x00 except STATUS_CML 0x80,,unverified,STATUS_CML 0x80 = invalid/unsupported command seen (consistent with the probe poking commands)
+0xFB,PRIMARY_FW_REVISION,0x35,ASCII '5'?,unverified,
+0xFC,SECONDARY_FW_VERSION,0x30,ASCII '0'?,unverified,
+0x1A,QUERY,failed,,measured,QUERY(0) failed. Command is unsupported or the process-call framing is wrong
+all,ACK map,all 256 codes ACK,,measured,PSU ACKs every command byte so the fallback map says nothing about support
