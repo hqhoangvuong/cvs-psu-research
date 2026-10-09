@@ -198,6 +198,33 @@ void variants() {
   }
 }
 
+// QUERY does not work on this PSU, so map command support by PEC: a command the PSU really serves
+// returns its data followed by a valid SMBus PEC; the unsupported ones seen so far return one stale
+// byte then 0xFF. Read 8 bytes per code (repeated start) and report the shortest prefix k (2..7)
+// whose last byte equals the PEC of addr+cmd+addr|1+preceding bytes. ~1/256 false matches per k, so
+// a hit is strong evidence, a miss is "no valid PEC" (unsupported, or no PEC on that command).
+void pecSweep() {
+  Serial.println(F("# pecsweep: pecsweep,cmd,k(data bytes+PEC),hex8   (only codes with a valid PEC)"));
+  int hits = 0;
+  for (int c = 0; c < 256; c++) {
+    uint8_t b[8] = {0};
+    int got = readRaw((uint8_t)c, 8, false, b);
+    if (got < 8) continue;
+    for (uint8_t k = 2; k <= 7; k++) {
+      uint8_t m[10] = {(uint8_t)(psu << 1), (uint8_t)c, (uint8_t)((psu << 1) | 1)};
+      for (uint8_t i = 0; i < k - 1; i++) m[3 + i] = b[i];
+      if (crc8(m, 3 + k - 1) == b[k - 1]) {
+        Serial.printf("pecsweep,0x%02X,k=%u,hex=", c, k);
+        for (int i = 0; i < 8; i++) Serial.printf("%02X", b[i]);
+        Serial.println();
+        hits++;
+        break;
+      }
+    }
+  }
+  Serial.printf("# pecsweep done, %d codes with valid PEC\n", hits);
+}
+
 void probe() {
   scanBus();
 
@@ -266,6 +293,7 @@ void probe() {
   printWord("MFR_MAX_TEMP_3", 0xC2);
 
   variants();
+  pecSweep();
 
   // QUERY every command code. info bit7 = supported, bit6 = write, bit5 = read,
   // bits4:2 = data format code (see PMBus Part II, QUERY). Raw byte is printed; decode offline.
