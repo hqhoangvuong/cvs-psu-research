@@ -232,14 +232,20 @@ void pecSweep() {
 }
 
 // Send 'w' on the serial monitor to poll every code that answered with a valid PEC, one CSV row per
-// cycle (cmd:data bytes, PEC dropped), until any key is sent. Change the load or the input while it
+// cycle (cmd:data bytes, PEC dropped), until a non-newline key is sent (e.g. 's'). Change the load or the input while it
 // runs and see which fields move. Fields that never change are static config.
 void watch() {
   if (!psu || !nHits) { Serial.println(F("# watch: run the probe first")); return; }
   Serial.print(F("# watch header: ms"));
   for (uint8_t i = 0; i < nHits; i++) Serial.printf(",%02X", hitCmd[i]);
   Serial.println();
-  while (!Serial.available()) {
+  bool stopWatch = false;
+  while (!stopWatch) {
+    while (Serial.available()) {  // ignore CR/LF; any other key stops
+      int k = Serial.read();
+      if (k != '\r' && k != '\n') stopWatch = true;
+    }
+    if (stopWatch) break;
     Serial.printf("watch,%lu", (unsigned long)millis());
     for (uint8_t i = 0; i < nHits; i++) {
       uint8_t b[8] = {0};
@@ -352,6 +358,7 @@ void setup() {
 void loop() {
   if (Serial.available()) {
     int ch = Serial.read();
+    delay(100);  // let a trailing CR/LF from the serial monitor arrive, then drop it
     while (Serial.available()) Serial.read();
     if (ch == 'w' || ch == 'W') watch(); else probe();
   }
