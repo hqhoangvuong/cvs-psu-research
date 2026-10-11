@@ -1,7 +1,8 @@
 // CSV750BP (part 00YL557) PMBus monitor for ESP8266 (Arduino core). Read-only.
 //
 // READ_EIN (0x86) mean power is shown as 'EIN avg' (finer than READ_PIN's 0.5 W steps); READ_EOUT (0x87)
-// is shown as a raw 'EOUT step' because its unit is not confirmed.
+// is shown as a raw 'EOUT step': it tracks EIN + about 3, so it is NOT output power (see notes).
+// Register 0x6F is shown as 'IOUT(int)': whole amps, probably truncated (best fit, unconfirmed).
 //
 // Built from bench measurements, see CSV750BP_PMBus_interface.md. Only commands that answered with a
 // valid PEC are polled. The 750BP does NOT serve READ_VOUT/IOUT/IIN/POUT, STATUS_WORD or CAPABILITY,
@@ -325,6 +326,7 @@ void poll() {
     Serial.printf("VIN %.2f V | T1 %.1f C | T2 %.1f C | fan %.0f rpm | PIN %.1f W | ", vinV, temp1, temp2, rpm, pinW);
     if (einW >= 0) Serial.printf("EIN avg %.2f W | ", einW);
     if (eoutRate >= 0) Serial.printf("EOUT step %.1f | ", eoutRate);
+    if (have6F) Serial.printf("IOUT(int, 0x6F) %d A | ", (int)v6f);
     if (haveOut) Serial.printf("VOUT %.3f V | IOUT %.3f A | POUT %.1f W | ", voutV, ioutA, poutW);
     else Serial.print("VOUT n/a | IOUT n/a | POUT n/a | ");
     if (eff >= 0) Serial.printf("eff %.1f %% | ", eff);

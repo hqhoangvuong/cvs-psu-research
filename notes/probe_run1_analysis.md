@@ -78,3 +78,13 @@ New PEC-valid codes from the longer sweep (56 total): 0x13 (block 14), 0x14 (blo
 - 0x13 word 4 (`18 04` = 1048 up to 1050) rose by 1-2 counts and word 3 (`6A 02` and similar, 618-627) is noisy. Neither is shown to be output voltage; 1048/85 and 620/50 both happen to land near the measured 12.33 V, which is probably coincidence.
 
 **Not found:** no register that reports 12.33 V directly, and no output current or power in known units. VOUT and POUT remain unidentified.
+
+## Run 7: Wii plus game disc (watch mode, marks 1-7, about 180 s)
+Timeline: mark 1 = Wii unplugged (to 82 s). The Wii powered up on its own at plug-in (mark 2, 82 s), so there is no "plugged in, off" state in this run. Marks 3 to 6 = menu, disc loading, game running, heavy scene. The Wii was switched off at about 231 s (mark 7 at 240 s). READ_PIN: 5-7 W unplugged; about 30-33 W from boot through the game; peak about 36 W; 6-8 W after switching off.
+Load differences between menu, game and heavy scene were small (about 30 to 36 W), so this run gives two clear levels (no load, about 31 W) plus the transitions.
+
+**0x6F is integer output current in amps, truncated (best fit).** Readings: 0 unplugged; 1 at the plug-in moment (PIN 7 W, inrush) and in the earlier run at PIN 19-23 W; 2 at PIN 20-36 W (never 3, never 0 while the Wii was running); 0 at 14 W (earlier run, Wii standby, about 0.6 A) and 0 after power-off. A rounding register would read 1 at 0.6 A; truncation fits all states. Cannot be refined without a series current reading. Resolution of 1 A is too coarse for monitoring.
+
+**EOUT does not measure output power.** Mean EOUT step minus mean EIN power: +3.0 unplugged (8.0 vs 5.0), +3.4 Wii standby (earlier run), +3.1 under load (34.1 vs 31.0). EOUT is the input power plus a constant of about 3, not an independent output measurement. READ_EIN's mean is the input power in watts (31.0 W at 31 W PIN).
+
+**Other registers:** 0x6C is PIN in LINEAR11 with finer steps than READ_PIN (32 W reads 0xE200, 33 W 0xE210). 0x6E is PIN as integer watts. 0x70 words (352-370 / 767 unplugged, 870-970 / 1285-1365 loaded) and 0x71 second word (18 unplugged, 46-53 loaded) rise with input power but not linearly; 0x72 and the 0x13/0x14 drifting words do not follow load. No register reports output voltage, and none reports output power in known units.
