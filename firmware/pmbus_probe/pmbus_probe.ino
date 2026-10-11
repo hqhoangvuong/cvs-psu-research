@@ -14,7 +14,8 @@
 // Paste the whole output back; it is formatted to be turned into the PMBus document.
 // A "variants" block tests read length (1-4 bytes) and repeated-start vs STOP framing per command.
 // Record the PSU state (main output on/off, load) with each capture.
-// Serial commands after the run: w = watch (marks, s stops), p = optional PAGE write test (asks for y).
+// Serial commands after the run: w = watch (marks, s stops), p = optional PAGE write test (asks for y),
+// v = read-only delay / double-read test of READ_VOUT, READ_IOUT, READ_IIN, READ_POUT.
 
 #include <Wire.h>
 
@@ -315,6 +316,44 @@ void pageTest() {
   Serial.println(F("# pagetest done (PAGE left at 0)"));
 }
 
+// Read-only. Send 'v' after the probe. For READ_VOUT/IOUT/IIN/POUT it tries what the earlier tests did not:
+// (a) a delay between the command write (with STOP) and the read, in case the PSU needs time to fetch
+//     the value from the other side, and (b) reading again WITHOUT re-sending the command byte.
+// Each line shows the 3 bytes read (data + would-be PEC) and whether the last byte is a valid PEC.
+void rawRead3(uint8_t cmd, const char *name, const char *how, uint16_t delayMs, bool again) {
+  Wire.beginTransmission(psu);
+  Wire.write(cmd);
+  uint8_t err = Wire.endTransmission(true);
+  if (err) { Serial.printf("vtest,0x%02X,%s,%s,write_err=%u\n", cmd, name, how, err); gap(); return; }
+  delay(delayMs);
+  for (uint8_t pass = 0; pass < (again ? 2 : 1); pass++) {
+    uint8_t b[3] = {0};
+    uint8_t got = Wire.requestFrom(psu, (uint8_t)3);
+    for (uint8_t i = 0; i < got; i++) b[i] = Wire.read();
+    uint8_t m[4] = {(uint8_t)(psu << 1), cmd, (uint8_t)((psu << 1) | 1), b[0]};
+    uint8_t m2[5] = {m[0], m[1], m[2], b[0], b[1]};
+    bool pec2 = crc8(m2, 5) == b[2];
+    Serial.printf("vtest,0x%02X,%s,%s,delay=%ums,pass=%u,hex=%02X%02X%02X,pec_valid=%s\n", cmd, name, how,
+                  delayMs, pass, b[0], b[1], b[2], pec2 ? "yes" : "no");
+    if (pass == 0 && again) delay(100);
+  }
+  gap();
+}
+
+void vTest() {
+  if (!psu) { Serial.println(F("# vtest: run the probe first")); return; }
+  Serial.println(F("# vtest: delay between write and read, and a second read without re-sending the command"));
+  const struct { uint8_t cmd; const char *name; } cmds[] = {
+    {0x8B, "READ_VOUT"}, {0x8C, "READ_IOUT"}, {0x89, "READ_IIN"}, {0x96, "READ_POUT"}, {0x88, "READ_VIN_control"},
+  };
+  const uint16_t delays[] = {0, 10, 50, 200, 500};
+  for (const auto &c : cmds) {
+    for (uint16_t d : delays) rawRead3(c.cmd, c.name, "delayed", d, false);
+    rawRead3(c.cmd, c.name, "double_read", 50, true);
+  }
+  Serial.println(F("# vtest done"));
+}
+
 void probe() {
   scanBus();
 
@@ -417,6 +456,7 @@ void loop() {
     while (Serial.available()) Serial.read();
     if (ch == 'w' || ch == 'W') watch();
     else if (ch == 'p' || ch == 'P') pageTest();
+    else if (ch == 'v' || ch == 'V') vTest();
     else probe();
   }
 }
