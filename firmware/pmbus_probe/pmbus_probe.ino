@@ -209,26 +209,36 @@ uint8_t nHits = 0;
 
 void pecSweep() {
   nHits = 0;
-  Serial.println(F("# pecsweep: pecsweep,cmd,k(data bytes+PEC),hex8   (only codes with a valid PEC)"));
+  Serial.println(F("# pecsweep: pecsweep,cmd,kind,hex   kind=blk<len> (SMBus block, long ones included) or k<N> (N bytes incl. PEC)"));
   int hits = 0;
   for (int c = 0; c < 256; c++) {
-    uint8_t b[8] = {0};
-    int got = readRaw((uint8_t)c, 8, false, b);
-    if (got < 8) continue;
-    for (uint8_t k = 2; k <= 7; k++) {
-      uint8_t m[10] = {(uint8_t)(psu << 1), (uint8_t)c, (uint8_t)((psu << 1) | 1)};
-      for (uint8_t i = 0; i < k - 1; i++) m[3 + i] = b[i];
-      if (crc8(m, 3 + k - 1) == b[k - 1]) {
-        Serial.printf("pecsweep,0x%02X,k=%u,hex=", c, k);
-        for (int i = 0; i < 8; i++) Serial.printf("%02X", b[i]);
-        Serial.println();
-        hits++;
-        if (nHits < sizeof(hitCmd)) { hitCmd[nHits] = c; hitK[nHits] = k; nHits++; }
-        break;
-      }
+    uint8_t b[40] = {0};
+    int got = readRaw((uint8_t)c, 36, false, b);
+    if (got < 36) continue;
+    uint8_t w = psu << 1;
+    uint8_t m[40] = {w, (uint8_t)c, (uint8_t)(w | 1)};
+    uint8_t usedK = 0;
+    bool isBlock = false;
+    // 1) SMBus block: [len][len data bytes][PEC]. Covers blocks longer than 6 bytes.
+    uint8_t len = b[0];
+    if (len >= 1 && len <= 33) {
+      for (uint8_t i = 0; i <= len; i++) m[3 + i] = b[i];
+      if (crc8(m, 3 + len + 1) == b[len + 1]) { usedK = len + 2; isBlock = true; }
     }
+    // 2) plain data (1..5 bytes) + PEC
+    for (uint8_t k = 2; !usedK && k <= 7; k++) {
+      for (uint8_t i = 0; i < k - 1; i++) m[3 + i] = b[i];
+      if (crc8(m, 3 + k - 1) == b[k - 1]) usedK = k;
+    }
+    if (!usedK) continue;
+    if (isBlock) Serial.printf("pecsweep,0x%02X,blk%u,hex=", c, b[0]);
+    else         Serial.printf("pecsweep,0x%02X,k%u,hex=", c, usedK);
+    for (int i = 0; i < usedK; i++) Serial.printf("%02X", b[i]);
+    Serial.println();
+    hits++;
+    if (nHits < sizeof(hitCmd)) { hitCmd[nHits] = c; hitK[nHits] = usedK; nHits++; }
   }
-  Serial.printf("# pecsweep done, %d codes with valid PEC\n", hits);
+  Serial.printf("# pecsweep done, %d codes with valid PEC (a lone match has about a 1 in 256 chance of being false)\n", hits);
 }
 
 // Send 'w' on the serial monitor to poll every code that answered with a valid PEC, one CSV row per
@@ -248,7 +258,7 @@ void watch() {
     if (stopWatch) break;
     Serial.printf("watch,%lu", (unsigned long)millis());
     for (uint8_t i = 0; i < nHits; i++) {
-      uint8_t b[8] = {0};
+      uint8_t b[40] = {0};
       int got = readRaw(hitCmd[i], hitK[i], false, b);
       Serial.print(',');
       if (got < 0) { Serial.print(F("ERR")); continue; }
