@@ -117,7 +117,7 @@ Values are at no load with the main output on.
 
 ### 5.3 Not implemented on this unit
 
-`CAPABILITY` (0x19), `PMBUS_REVISION` (0x98), `STATUS_BYTE` (0x78), `STATUS_WORD` (0x79), `READ_IIN` (0x89), `READ_VOUT` (0x8B), `READ_IOUT` (0x8C), `READ_TEMPERATURE_3` (0x8F), `READ_POUT` (0x96), `MFR_IOUT_MAX` (0xA6), `MFR_MAX_TEMP_1..3` (0xC0 to 0xC2), `QUERY` (0x1A). Values read from them (for example `CAPABILITY` 0xFC, `PMBUS_REVISION` 0x5F) are stale bytes, not data. **M**
+`CAPABILITY` (0x19), `PMBUS_REVISION` (0x98), `STATUS_BYTE` (0x78), `STATUS_WORD` (0x79), `READ_IIN` (0x89), `READ_VOUT` (0x8B), `READ_IOUT` (0x8C), `READ_TEMPERATURE_3` (0x8F), `READ_POUT` (0x96), `MFR_IOUT_MAX` (0xA6), `MFR_MAX_TEMP_1..3` (0xC0 to 0xC2), `QUERY` (0x1A). Writing `PAGE` (0x00) to 0 and 1 (acknowledged) did not change any of them, so paging does not unlock them. Values read from them (for example `CAPABILITY` 0xFC, `PMBUS_REVISION` 0x5F) are stale bytes, not data. **M**
 
 ### 5.4 Not tested
 
