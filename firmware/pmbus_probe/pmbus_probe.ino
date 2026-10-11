@@ -242,7 +242,7 @@ void pecSweep() {
 }
 
 // Send 'w' on the serial monitor to poll every code that answered with a valid PEC, one CSV row per
-// cycle (cmd:data bytes, PEC dropped), until a non-newline key is sent (e.g. 's'). Change the load or the input while it
+// cycle (cmd:data bytes, PEC dropped), until 's' is sent. Any other key (e.g. 1, 2, 3) logs a `mark,<ms>,<key>` row so you can label load changes (1 = Wii unplugged, 2 = plugged in, 3 = on...). Change the load or the input while it
 // runs and see which fields move. Fields that never change are static config.
 void watch() {
   if (!psu || !nHits) { Serial.println(F("# watch: run the probe first")); return; }
@@ -251,9 +251,11 @@ void watch() {
   Serial.println();
   bool stopWatch = false;
   while (!stopWatch) {
-    while (Serial.available()) {  // ignore CR/LF; any other key stops
+    while (Serial.available()) {  // 's' stops; CR/LF ignored; any other key writes a mark row
       int k = Serial.read();
-      if (k != '\r' && k != '\n') stopWatch = true;
+      if (k == '\r' || k == '\n') continue;
+      if (k == 's' || k == 'S') stopWatch = true;
+      else Serial.printf("mark,%lu,%c\n", (unsigned long)millis(), (char)k);
     }
     if (stopWatch) break;
     Serial.printf("watch,%lu", (unsigned long)millis());
