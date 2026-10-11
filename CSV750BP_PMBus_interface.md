@@ -77,7 +77,7 @@ A reply with no valid PEC means the command is not implemented (a stale byte, th
 | 0x90 | READ_FAN_SPEED_1 | about 5980 to 6770 rpm | LINEAR11 (exponent +3) | **M** |
 | 0x97 | READ_PIN | 2 to 5 W at no load | LINEAR11. Idle input power, resolution 0.5 W | **M** |
 | 0xA7 | MFR_POUT_MAX | 750 | LINEAR11, watts | **M** |
-| 0x86 | READ_EIN | block of 6 | Input energy: accumulator (2 bytes LE, wraps at 32768), rollover (1), samples (3 LE). Mean per sample = delta(rollover x 32768 + accumulator) / delta(samples) = input power in W (about 14 samples/s). Matches READ_PIN | **M** |
+| 0x86 | READ_EIN | block of 6 | Input energy (DIRECT format, m=1 b=0 R=0): accumulator (2 bytes LE, wraps at 32768), rollover (1), samples (3 LE). Mean per sample = delta(rollover x 32768 + accumulator) / delta(samples) = input power in W (about 14 samples/s). Matches READ_PIN | **M** |
 | 0x87 | READ_EOUT | block of 6 | Same layout, about 310 samples/s. Mean per sample = EIN mean + about 3 in every state tested (8.0 / 5.0 at no load, 34.1 / 31.0 at 31 W). It tracks input power, not output power | **M** |
 | 0x99 | MFR_ID | `EMER` | Block, ASCII | **M** |
 | 0x9A | MFR_MODEL | `00YL557` | Block, 12 bytes, space padded | **M** |
@@ -87,7 +87,7 @@ A reply with no valid PEC means the command is not implemented (a stale byte, th
 | 0x9D | MFR_DATE | 30 bytes of 0xFF | Block, not programmed | **M** |
 | 0xFB | PRIMARY_FW_REVISION | 0x35 | Byte | **M** |
 | 0xFC | SECONDARY_FW_VERSION | 0x30 | Byte | **M** |
-| 0x30 | COEFFICIENTS | `01 00 00 00 00` | 5-byte block, meaning unknown | **M**, decode ? |
+| 0x30 | COEFFICIENTS | `01 00 00 00 00` | 5-byte block: m = 1 (bytes 1-2 LE), b = 0 (bytes 3-4), R = 0 (byte 5), the DIRECT-format coefficients as in the CSV2000BP note. Identity scaling: a DIRECT value equals its raw value | **M** |
 | 0x3A | (FAN_CONFIG_1_2?) | 0xD0 | Byte | **M**, name I |
 | 0x3B | (FAN_COMMAND_1?) | `0x0BE8` | Word | **M**, meaning ? |
 
