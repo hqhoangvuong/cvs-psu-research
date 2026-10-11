@@ -305,6 +305,7 @@ void pageTest() {
   for (uint8_t pg : pages) {
     int err = writeByteC(0x00, pg);
     Serial.printf("pagetest,write PAGE=%u,err=%d\n", pg, err);
+    printRaw(0x7E, "STATUS_CML_right_after_write", 2, false);  // before any unsupported read can set bit 7
     printRaw(0x00, "PAGE", 2, false);
     printRaw(0x8B, "READ_VOUT", 3, false);
     printRaw(0x8C, "READ_IOUT", 3, false);
