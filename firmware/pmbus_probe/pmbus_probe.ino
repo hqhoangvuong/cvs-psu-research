@@ -14,6 +14,7 @@
 // Paste the whole output back; it is formatted to be turned into the PMBus document.
 // A "variants" block tests read length (1-4 bytes) and repeated-start vs STOP framing per command.
 // Record the PSU state (main output on/off, load) with each capture.
+// Serial commands after the run: w = watch (marks, s stops), p = optional PAGE write test (asks for y).
 
 #include <Wire.h>
 
@@ -272,6 +273,47 @@ void watch() {
   Serial.println(F("# watch stopped"));
 }
 
+// OPTIONAL, WRITES TO THE PSU. Send 'p', then 'y' within 10 s. Writes only the PAGE command (0x00),
+// with PEC, to pages 0, 1 and back to 0, and re-reads PAGE/READ_VOUT/READ_IOUT/STATUS_WORD/STATUS_CML
+// after each. Never writes VOUT_COMMAND, ILIMIT_TRIM, OPERATION or PMBUS_STANDBY.
+int writeByteC(uint8_t cmd, uint8_t val) {
+  uint8_t m[3] = {(uint8_t)(psu << 1), cmd, val};
+  uint8_t pec = crc8(m, 3);
+  Wire.beginTransmission(psu);
+  Wire.write(cmd);
+  Wire.write(val);
+  Wire.write(pec);
+  uint8_t err = Wire.endTransmission();
+  gap();
+  return err;
+}
+
+void pageTest() {
+  if (!psu) { Serial.println(F("# pagetest: run the probe first")); return; }
+  Serial.println(F("# pagetest: this WRITES the PAGE command. Send 'y' within 10 s to proceed, anything else cancels."));
+  uint32_t t0 = millis();
+  int ans = -1;
+  while (millis() - t0 < 10000 && ans < 0) {
+    while (Serial.available()) { int k = Serial.read(); if (k != '\r' && k != '\n') { ans = k; break; } }
+    delay(10);
+  }
+  while (Serial.available()) Serial.read();
+  if (ans != 'y' && ans != 'Y') { Serial.println(F("# pagetest cancelled")); return; }
+  Serial.println(F("# pagetest: columns same as variant lines"));
+  printRaw(0x7E, "STATUS_CML_before", 2, false);
+  const uint8_t pages[] = {0, 1, 0};
+  for (uint8_t pg : pages) {
+    int err = writeByteC(0x00, pg);
+    Serial.printf("pagetest,write PAGE=%u,err=%d\n", pg, err);
+    printRaw(0x00, "PAGE", 2, false);
+    printRaw(0x8B, "READ_VOUT", 3, false);
+    printRaw(0x8C, "READ_IOUT", 3, false);
+    printRaw(0x79, "STATUS_WORD", 3, false);
+    printRaw(0x7E, "STATUS_CML", 2, false);
+  }
+  Serial.println(F("# pagetest done (PAGE left at 0)"));
+}
+
 void probe() {
   scanBus();
 
@@ -372,6 +414,8 @@ void loop() {
     int ch = Serial.read();
     delay(100);  // let a trailing CR/LF from the serial monitor arrive, then drop it
     while (Serial.available()) Serial.read();
-    if (ch == 'w' || ch == 'W') watch(); else probe();
+    if (ch == 'w' || ch == 'W') watch();
+    else if (ch == 'p' || ch == 'P') pageTest();
+    else probe();
   }
 }
