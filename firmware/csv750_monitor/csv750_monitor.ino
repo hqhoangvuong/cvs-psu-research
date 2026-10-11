@@ -42,6 +42,10 @@ constexpr float VIN_MIN = 90.0f, VIN_MAX = 264.0f;   // data sheet input range
 constexpr float TEMP_WARN_C = 70.0f;
 constexpr float FAN_MIN_RPM = 500.0f;                // below this the fan is considered stopped
 
+// Defined before any function so the Arduino auto-generated prototypes can see it.
+struct Accum { bool valid = false; uint64_t total = 0; uint32_t samples = 0; };
+Accum einPrev, eoutPrev;
+
 uint8_t psu = 0;        // 7-bit address
 bool csvOut = false;
 uint32_t okReads = 0, pecErrors = 0, busErrors = 0;
@@ -148,8 +152,6 @@ bool findPsu() {
 // Block of 6: accumulator (2 bytes LE, wraps at 32768), rollover count (1), sample count (3 LE).
 // Mean value per sample over an interval = delta(rollover*32768 + accumulator) / delta(samples).
 // EIN's mean tracks READ_PIN in watts (measured). EOUT's unit is NOT confirmed (see notes).
-struct Accum { bool valid = false; uint64_t total = 0; uint32_t samples = 0; };
-Accum einPrev, eoutPrev;
 
 bool readAccum(uint8_t cmd, uint64_t &total, uint32_t &samples) {
   uint8_t b[7];
