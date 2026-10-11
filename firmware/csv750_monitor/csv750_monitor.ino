@@ -1,5 +1,8 @@
 // CSV750BP (part 00YL557) PMBus monitor for ESP8266 (Arduino core). Read-only.
 //
+// READ_EIN (0x86) mean power is shown as 'EIN avg' (finer than READ_PIN's 0.5 W steps); READ_EOUT (0x87)
+// is shown as a raw 'EOUT step' because its unit is not confirmed.
+//
 // Built from bench measurements, see CSV750BP_PMBus_interface.md. Only commands that answered with a
 // valid PEC are polled. The 750BP does NOT serve READ_VOUT/IOUT/IIN/POUT, STATUS_WORD or CAPABILITY,
 // so output voltage, current and power come from an external INA260 or INA226 power monitor in series
@@ -140,6 +143,33 @@ bool findPsu() {
   return false;
 }
 
+// ---------- energy accumulators (READ_EIN 0x86 / READ_EOUT 0x87) ----------
+// Block of 6: accumulator (2 bytes LE, wraps at 32768), rollover count (1), sample count (3 LE).
+// Mean value per sample over an interval = delta(rollover*32768 + accumulator) / delta(samples).
+// EIN's mean tracks READ_PIN in watts (measured). EOUT's unit is NOT confirmed (see notes).
+struct Accum { bool valid = false; uint64_t total = 0; uint32_t samples = 0; };
+Accum einPrev, eoutPrev;
+
+bool readAccum(uint8_t cmd, uint64_t &total, uint32_t &samples) {
+  uint8_t b[7];
+  if (!readPec(cmd, b, 7) || b[0] != 6) return false;
+  uint32_t acc = b[1] | (b[2] << 8);
+  total = (uint64_t)b[3] * 32768ULL + acc;
+  samples = b[4] | ((uint32_t)b[5] << 8) | ((uint32_t)b[6] << 16);
+  return true;
+}
+
+// Returns mean per sample since the previous call, or -1 if unavailable.
+float accumRate(uint8_t cmd, Accum &prev) {
+  uint64_t total; uint32_t samples;
+  if (!readAccum(cmd, total, samples)) { prev.valid = false; return -1; }
+  float rate = -1;
+  if (prev.valid && samples > prev.samples && total >= prev.total)
+    rate = (float)(total - prev.total) / (float)(samples - prev.samples);
+  prev.valid = true; prev.total = total; prev.samples = samples;
+  return rate;
+}
+
 // ---------- optional INA226 / INA260 output meter ----------
 bool inaRead(uint8_t reg, uint16_t &v) {
   Wire.beginTransmission(inaAddr);
@@ -212,7 +242,7 @@ void printIdentity() {
   if (readByteC(0xFB, a) && readByteC(0xFC, b)) Serial.printf("# FW primary=0x%02X secondary=0x%02X\n", a, b);
   if (readByteC(0x02, a)) Serial.printf("# ON_OFF_CONFIG=0x%02X\n", a);
   Serial.printf("# PSU 7-bit 0x%02X (8-bit 0x%02X)\n", psu, psu << 1);
-  if (csvOut) Serial.println(F("ms,vin_v,temp1_c,temp2_c,fan_rpm,pin_w,vout_v,iout_a,pout_w,eff_pct,pin_int_w,vendor6F,st_vout,st_iout,st_in,st_temp,st_cml,st_mfr,st_fan,alarms,ok,pec_err,bus_err"));
+  if (csvOut) Serial.println(F("ms,vin_v,temp1_c,temp2_c,fan_rpm,pin_w,ein_avg_w,eout_rate,vout_v,iout_a,pout_w,eff_pct,pin_int_w,vendor6F,st_vout,st_iout,st_in,st_temp,st_cml,st_mfr,st_fan,alarms,ok,pec_err,bus_err"));
 }
 
 void dumpVendor() {  // one-shot dump of the unidentified vendor registers (read-only)
@@ -267,6 +297,8 @@ void poll() {
 
   float vinV = linear11(vin), temp1 = linear11(t1), temp2 = linear11(t2);
   float rpm = linear11(fan), pinW = linear11(pin);
+  float einW = accumRate(0x86, einPrev);       // mean input power (W) since last poll
+  float eoutRate = accumRate(0x87, eoutPrev);  // mean EOUT accumulator step per sample, unit unconfirmed
   float voutV = 0, ioutA = 0, poutW = 0;
   bool haveOut = readOutput(voutV, ioutA, poutW);
   // Efficiency is only meaningful with real load: PIN has 0.5 W resolution and the PSU draws 2 to 7 W idle.
@@ -281,6 +313,8 @@ void poll() {
 
   if (csvOut) {
     Serial.printf("%lu,%.2f,%.1f,%.1f,%.0f,%.1f,", (unsigned long)millis(), vinV, temp1, temp2, rpm, pinW);
+    if (einW >= 0) Serial.printf("%.2f,", einW); else Serial.print("n/a,");
+    if (eoutRate >= 0) Serial.printf("%.2f,", eoutRate); else Serial.print("n/a,");
     if (haveOut) Serial.printf("%.3f,%.3f,%.1f,", voutV, ioutA, poutW); else Serial.print("n/a,n/a,n/a,");
     if (eff >= 0) Serial.printf("%.1f,", eff); else Serial.print("n/a,");
     Serial.printf("%d,%d,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%s,%lu,%lu,%lu\n",
@@ -289,6 +323,8 @@ void poll() {
                   (unsigned long)okReads, (unsigned long)pecErrors, (unsigned long)busErrors);
   } else {
     Serial.printf("VIN %.2f V | T1 %.1f C | T2 %.1f C | fan %.0f rpm | PIN %.1f W | ", vinV, temp1, temp2, rpm, pinW);
+    if (einW >= 0) Serial.printf("EIN avg %.2f W | ", einW);
+    if (eoutRate >= 0) Serial.printf("EOUT step %.1f | ", eoutRate);
     if (haveOut) Serial.printf("VOUT %.3f V | IOUT %.3f A | POUT %.1f W | ", voutV, ioutA, poutW);
     else Serial.print("VOUT n/a | IOUT n/a | POUT n/a | ");
     if (eff >= 0) Serial.printf("eff %.1f %% | ", eff);

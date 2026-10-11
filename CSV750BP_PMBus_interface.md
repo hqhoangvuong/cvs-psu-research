@@ -77,6 +77,8 @@ A reply with no valid PEC means the command is not implemented (a stale byte, th
 | 0x90 | READ_FAN_SPEED_1 | about 5980 to 6770 rpm | LINEAR11 (exponent +3) | **M** |
 | 0x97 | READ_PIN | 2 to 5 W at no load | LINEAR11. Idle input power, resolution 0.5 W | **M** |
 | 0xA7 | MFR_POUT_MAX | 750 | LINEAR11, watts | **M** |
+| 0x86 | READ_EIN | block of 6 | Input energy: accumulator (2 bytes LE, wraps at 32768), rollover (1), samples (3 LE). Mean per sample = delta(rollover x 32768 + accumulator) / delta(samples) = input power in W (about 14 samples/s). Matches READ_PIN | **M** |
+| 0x87 | READ_EOUT | block of 6 | Same layout, about 310 samples/s. Mean per sample rises with load (8.0 at no load, about 28 with a 20 W load) but is not in watts; unit unknown | **M**, unit ? |
 | 0x99 | MFR_ID | `EMER` | Block, ASCII | **M** |
 | 0x9A | MFR_MODEL | `00YL557` | Block, 12 bytes, space padded | **M** |
 | 0x9B | MFR_REVISION | `00YL556` | Block, 12 bytes | **M** |
@@ -96,10 +98,10 @@ Values are at no load with the main output on.
 | Code | Reads | Notes |
 |---|---|---|
 | 0x6C | `0xCA80` | Constant; equals READ_PIN at a snapshot (5.0 W) |
-| 0x6E | 5, 6, 7 | Integer watts; tracks READ_PIN |
-| 0x6F | 0 | Possibly an integer POUT or IOUT. Needs a load to confirm |
-| 0x70 | block `60/72 01 FF 02` | 4 bytes, first byte flickers |
-| 0x71 | block `00 00 12 00` | Second byte flickers 00/01 |
+| 0x6E | 5-7 at no load, 19-23 at ~20 W | Integer watts; tracks READ_PIN |
+| 0x6F | 0 at no load; 1 or 2 with a ~20 W load (Wii), 0 again with the load off | Possibly integer output current in amps (rounds near 1.5 A). Unconfirmed: needs a series current reading |
+| 0x70 | block, two words: 352/767 at no load, 722-741/1154-1171 at ~20 W | Linear in input power (about 25 counts/W): raw input-side ADC values, not output |
+| 0x71 | block, second word 18 at no load, 31-45 at ~20 W | Rises with load, unidentified |
 | 0x72 | block `FB/FD D2/FE 9E 9A` | Noisy |
 | 0x83, 0x84, 0xBE, 0xD9, 0xDA | 0x0C, 0, 0, 0, 0 | Static |
 | 0xA8, 0xB0 | 750 | Static |
@@ -123,11 +125,11 @@ All other command codes in the CSV2000BP table (for example `CLEAR_FAULTS` 0x03;
 
 ## 6. Output current, power and voltage
 
-No PMBus register for output current, power or voltage has been identified. At no load, `0x6F` reads 0 and `0x6E`/`0xE1` track input power. A load test is needed to confirm which vendor code carries output current or power. Output voltage was measured only with a multimeter (12.32 to 12.33 V). To log them anyway, `firmware/csv750_monitor/` reads VOUT, IOUT and POUT from an external INA260 or INA226 in series with the output. **?**
+No PMBus register for output voltage, current or power in known units has been identified. A load test with a Wii console (about 20 W) showed `0x6F` rising from 0 to 1 or 2 and `READ_EOUT` (0x87) rising with load, but neither is confirmed: `0x6F` is a coarse integer and EOUT is not in watts. A load test is needed to confirm which vendor code carries output current or power. Output voltage was measured only with a multimeter (12.32 to 12.33 V). To log them anyway, `firmware/csv750_monitor/` reads VOUT, IOUT and POUT from an external INA260 or INA226 in series with the output. **?**
 
 ## 7. Open items
 
-1. Identify the output measurement registers with a load (candidates: 0x6F, 0x70 to 0x72).
+1. Confirm 0x6F as output current in amps with a series multimeter reading at a known load, and find the unit of EOUT.
 2. Ask Advanced Energy support (productsupport.ep@aei.com) for the 00YL557 command list.
 3. Test writes (`CLEAR_FAULTS` and the fan commands) only if wanted; the probe does none.
 4. Measure SMB_ALERT#, PWOK and PRESENT electrically; not yet done.

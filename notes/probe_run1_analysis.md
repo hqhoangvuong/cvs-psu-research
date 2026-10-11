@@ -58,3 +58,23 @@ Fields are data bytes in receive order (low byte first), PEC dropped.
 - **Flickering, undecoded:** 0x70 first byte `60`/`72` (rest `01 FF 02`); 0x71 second byte `00`/`01` (rest `00 12 00`); 0x72 `FB`/`FD`, `D2`/`FE`, 9E (4-byte block). These change in the low byte only, like ADC raw counts, so they are probably raw sensor values.
 - STATUS_CML read 0x82 at the start of the watch and 0x00 afterwards. Bit 7 = invalid/unsupported command, bit 1 = other communication fault: those bits are set by our reads of unsupported command codes (READ_IOUT etc.) and cleared by the status read. This is independent evidence that the PSU itself treats those commands as invalid.
 - No candidate for VOUT (12.3 V) or IOUT stands out at no load. The output voltage is not obviously exposed.
+
+## Run 6: Wii as load (watch mode, marks 1-5, about 185 s)
+Timeline from the marks and PIN: 1 = Wii unplugged (to ~79 s); 2 = Wii plugged in, console off (79 to ~88 s); the Wii was switched on at ~88 s (PIN rose before mark 3 at 95 s); 3 and 4 = Wii on at the menu (no game was available, so mark 4 is the same state); the Wii was switched off at ~151 s; 5 = Wii off (standby) to the end. READ_PIN: 5-7 W unplugged, 19-23 W on, about 14 W after switching off (the Wii draws about 8 W in standby).
+
+New PEC-valid codes from the longer sweep (56 total): 0x13 (block 14), 0x14 (block 21), 0x86 and 0x87 (block 6 each), 0xD5 (block 7, static `07 15 10 00 00 00 00`), and the long ASCII blocks 0x9A, 0x9B, 0x9C, 0x9E.
+
+**READ_EIN (0x86) and READ_EOUT (0x87) are implemented.** Block of 6: accumulator (2 bytes little endian, wraps at about 32768), rollover count (1 byte), sample count (3 bytes little endian). Mean value per sample = delta(rollover x 32768 + accumulator) / delta(samples), checked across two rollovers.
+- EIN: about 14 samples per second. Mean per sample: 5.1 (unplugged), 20.8 (Wii on), 14.3 (Wii off). This matches READ_PIN in watts, so EIN is input power in watts at finer resolution than READ_PIN.
+- EOUT: about 310 samples per second. Mean per sample: 8.0 exactly (unplugged and Wii off-line), about 27-30 (Wii on), about 17.7 (standby). It scales with load, but the unit is **not** watts: 8.0 at no load is above the 5 W input power, and 28 is above the 21 W input power. It is not proportional to PIN either (ratios 1.57, 1.35, 1.24). Treat as an unscaled load-dependent value.
+- 0x13 and 0x14 are extended snapshots containing PIN as integer words, copies of the EIN counters, and several slowly changing words (0x13 data: PIN int, PIN int, `6A 02`, `18 04`, then the EIN accumulator and count). Unscaled and unidentified.
+
+**Candidates that respond to load:**
+- **0x6F** (word): 0 unplugged, 1 or 2 with the Wii on (alternating), 0 with the Wii off. Consistent with output current in whole amps at about 1.5 A (about 18.5 W out for about 21 W in). Not confirmed: after switching the Wii off, PIN stayed at 14 W but 0x6F read 0, which suggests it either truncates, or covers only the main rail. Needs a series multimeter reading.
+- **0x6E**: integer watts of input power (matches PIN, 5-7 unplugged, 19-23 on, 14 standby).
+- **0x70** (block 4, two words): 352 / 767 unplugged, about 540-560 / 960 standby, 722-741 / 1154-1171 on. Linear in PIN at about 25 counts per watt. Raw input-side ADC values, not output.
+- **0x71** (block 4, second word): 18 unplugged, 27-29 standby, 31-45 on. Roughly 1.5 x PIN + 9. Unidentified.
+- **0x72**, 0x83, 0x84, 0xB9-0xBE, 0xD9, 0xDA, 0xDE, 0xDF, 0xE3, 0xFA-0xFE: unchanged by the load.
+- 0x13 word 4 (`18 04` = 1048 up to 1050) rose by 1-2 counts and word 3 (`6A 02` and similar, 618-627) is noisy. Neither is shown to be output voltage; 1048/85 and 620/50 both happen to land near the measured 12.33 V, which is probably coincidence.
+
+**Not found:** no register that reports 12.33 V directly, and no output current or power in known units. VOUT and POUT remain unidentified.
