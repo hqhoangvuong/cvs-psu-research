@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-Research workspace for PMBus/I2C communication with Artesyn (Advanced Energy) CSV-series AC-DC front-end power supplies. There is no code, build system, tests, or git history yet. The only content is reference PDFs in `docs/`. Update this file once source code is added.
+Research workspace for PMBus/I2C communication with the Artesyn (Advanced Energy) CSV750BP AC-DC front end. The deliverable, `CSV750BP_PMBus_interface.md`, is written from bench measurements on one unit (MFR_MODEL `00YL557`). Reference PDFs are in `docs/`, extracted facts in `notes/`, ESP8266 sketches in `firmware/`. Update the document and `notes/probe_run1_analysis.md` when new measurements arrive.
+
+Key measured facts (details in the document):
+- 7-bit address 0x68, 2.2 kΩ pull-ups required (10 kΩ made the PSU stop answering), every implemented command carries an SMBus PEC, and a reply with no valid PEC means "not implemented" (stale byte then 0xFF).
+- READ_VOUT/IOUT/IIN/POUT, STATUS_WORD, CAPABILITY and PMBUS_REVISION are not served, even after PAGE writes, delays and double reads. Do not read the stale bytes as data.
+- Served: READ_VIN, READ_PIN, READ_EIN/EOUT (EOUT only tracks input power), temperatures 1 and 2, fan speed, identity strings, individual status bytes, vendor register 0x6F (integer output amps, probably truncated).
+- The CSV2000BP command table does not carry over; the notes' source tables are family documents, not this unit's firmware.
 
 ## Goal
 
@@ -24,9 +30,11 @@ Ways to confirm 750BP behaviour: send `QUERY` (0x1A) per command, read `PMBUS_RE
 
 ## Firmware (`firmware/`)
 
-`firmware/pmbus_probe/pmbus_probe.ino` is a read-only ESP8266 (Arduino core) sketch that scans the bus, reads identity/status/telemetry, shows `READ_VOUT` as both LINEAR11 and LINEAR16, and sweeps `QUERY` (0x1A) over all 256 command codes. Its wiring is in the file header, and it outputs CSV-like lines over serial at 115200 baud. The sketch has not been compiled or run: no Arduino toolchain is installed here. Keep it read-only, and don't add writes to OPERATION or CLEAR_FAULTS without the user asking.
+- `firmware/pmbus_probe/pmbus_probe.ino`: ESP8266 (Arduino core) probe. Identity/status/telemetry reads, framing variants, a PEC-based command support sweep (the PSU has no working QUERY), `w` watch mode with marker keys, `v` delay/double-read test, and `p` PAGE write test (asks for `y`; the only write it ever does). Everything else is read-only; do not add writes to OPERATION or CLEAR_FAULTS without the user asking. The user has run it on a real unit; its output is recorded in `notes/probe_run1_analysis.md`.
+- `firmware/csv750_monitor/csv750_monitor.ino`: read-only PEC-checked monitor (VIN, PIN, EIN average power, temperatures, fan, status bytes, 0x6F as integer amps) with optional INA260/INA226 output metering. Compile-checked only against stub headers here; keep struct definitions above functions (Arduino auto-prototypes).
+- `firmware/csv750_pmbus_esp8266.ino`: the user's own earlier monitor sketch; leave it alone.
 
-Bench notes: the user's bench uses an ESP8266 with 10 kΩ pull-ups (not the 2.2 kΩ recommended) and ~220 V mains. Only readings from a steady-state run count as evidence, since values captured while the PSU was being unplugged (VIN 2.55 V, negative currents, STATUS 0xFF09) are garbage from the shutdown, not a protocol bug. `firmware/csv750_pmbus_esp8266.ino` is the user's own monitor sketch, edited to use a 100 ms stretch limit, a 20 ms inter-transaction gap and raw hex output.
+Bench notes: ESP8266 with 2.2 kΩ pull-ups, ~220 V mains, PSON hardwired asserted (main output on at AC). Loads used: none, and a Wii console (about 20 to 36 W input). Only steady-state readings count as evidence; values captured while unplugging are garbage.
 
 ## Reference documents (`docs/`)
 
